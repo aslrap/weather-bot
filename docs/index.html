@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Ob-havo</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root {
+        --bg: var(--tg-theme-bg-color, #ffffff);
+        --text: var(--tg-theme-text-color, #1c1c1e);
+        --hint: var(--tg-theme-hint-color, #8e8e93);
+        --card: var(--tg-theme-secondary-bg-color, #f2f2f7);
+        --accent: var(--tg-theme-button-color, #2481cc);
+        --accent-text: var(--tg-theme-button-text-color, #ffffff);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 16px 16px 32px;
+        max-width: 480px;
+        margin: 0 auto;
+      }
+      .city-btn {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        cursor: pointer;
+        background: var(--card);
+        color: var(--text);
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 16px;
+      }
+      form {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 12px;
+        font-size: 16px;
+        border-radius: 12px;
+        border: 0;
+        background: var(--card);
+        color: var(--text);
+      }
+      .primary {
+        background: var(--accent);
+        color: var(--accent-text);
+        border: 0;
+        border-radius: 12px;
+        padding: 0 16px;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin-top: 8px;
+      }
+      li button {
+        width: 100%;
+        text-align: left;
+        padding: 12px;
+        margin-bottom: 6px;
+        font-size: 15px;
+        background: var(--card);
+        color: var(--text);
+        border: 0;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      li small,
+      .hint {
+        display: block;
+        color: var(--hint);
+      }
+      .now {
+        margin-top: 16px;
+        padding: 24px 16px;
+        border-radius: 20px;
+        text-align: center;
+        background: var(--accent);
+        color: var(--accent-text);
+      }
+      .now .emoji {
+        font-size: 56px;
+        line-height: 1.1;
+      }
+      .now .temp {
+        font-size: 56px;
+        font-weight: 700;
+      }
+      .now .desc {
+        opacity: 0.9;
+        margin-top: 4px;
+      }
+      .now .meta {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 16px;
+        font-size: 14px;
+      }
+      h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 24px 0 8px;
+        color: var(--hint);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--card);
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+      }
+      .row .emoji {
+        font-size: 26px;
+      }
+      .row .day {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .day small {
+        display: block;
+        color: var(--hint);
+        font-size: 12px;
+      }
+      .row .t {
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      input[type="date"] {
+        width: 100%;
+        flex: none;
+      }
+      #dayBox {
+        margin-top: 10px;
+      }
+      #status {
+        text-align: center;
+        color: var(--hint);
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <button class="city-btn" id="cityBtn">
+        📍 <span id="city">Toshkent</span> ▾
+      </button>
+      <form id="searchForm" hidden>
+        <input
+          id="q"
+          placeholder="Shahar nomi (masalan: Samarqand)"
+          autocomplete="off"
+        />
+        <button class="primary">Qidirish</button>
+      </form>
+      <ul id="results" hidden></ul>
+
+      <section class="now" id="now"></section>
+
+      <h2>7 kunlik prognoz</h2>
+      <div id="daily"></div>
+
+      <h2>Sanani tanlang</h2>
+      <input type="date" id="date" />
+      <div id="dayBox"></div>
+
+      <p id="status"></p>
+    </main>
+
+    <script>
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const pad = (n) => String(n).padStart(2, "0");
+      const localISO = (d) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+      const WEEKDAYS = [
+        "Yakshanba",
+        "Dushanba",
+        "Seshanba",
+        "Chorshanba",
+        "Payshanba",
+        "Juma",
+        "Shanba",
+      ];
+      const MONTHS = [
+        "yan",
+        "fev",
+        "mar",
+        "apr",
+        "may",
+        "iyn",
+        "iyl",
+        "avg",
+        "sen",
+        "okt",
+        "noy",
+        "dek",
+      ];
+      const DEFAULT_CITY = { name: "Toshkent", lat: 41.2995, lon: 69.2401 };
+      const DAILY =
+        "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max";
+
+      function loadCity() {
+        try {
+          return JSON.parse(localStorage.getItem("city")) || DEFAULT_CITY;
+        } catch (e) {
+          return DEFAULT_CITY;
+        }
+      }
+      function saveCity(c) {
+        try {
+          localStorage.setItem("city", JSON.stringify(c));
+        } catch (e) {}
+      }
+      let city = loadCity();
+
+      function wmo(code) {
+        if (code === 0) return ["☀️", "Ochiq osmon"];
+        if (code <= 3) return ["⛅️", "Qisman bulutli"];
+        if (code <= 48) return ["🌫", "Tuman"];
+        if (code <= 57) return ["🌦", "Mayda yomg'ir"];
+        if (code <= 67) return ["🌧", "Yomg'ir"];
+        if (code <= 77) return ["❄️", "Qor"];
+        if (code <= 82) return ["🌧", "Jala"];
+        if (code <= 86) return ["🌨", "Qor jalasi"];
+        return ["⛈", "Momaqaldiroq"];
+      }
+
+      function dayLabel(date, today) {
+        if (today) return "Bugun";
+        const d = new Date(date + "T00:00:00");
+        return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${
+          MONTHS[d.getMonth()]
+        }`;
+      }
+
+      function dayRow(date, code, min, max, rain, wind, today) {
+        const [emoji, text] = wmo(code);
+        return `<div class="row">
+      <span class="emoji">${emoji}</span>
+      <div class="day">${dayLabel(
+        date,
+        today
+      )}<small>${text} · 🌧 ${rain} mm · 💨 ${Math.round(
+          wind
+        )} km/soat</small></div>
+      <div class="t">${Math.round(min)}° / <b>${Math.round(max)}°</b></div>
+    </div>`;
+      }
+
+      function renderNow(c) {
+        const [emoji, text] = wmo(c.weather_code);
+        $("now").innerHTML = `
+      <div class="emoji">${emoji}</div>
+      <div class="temp">${Math.round(c.temperature_2m)}°C</div>
+      <div class="desc">${text}</div>
+      <div class="meta">
+        <span>🤒 His qilinadi: ${Math.round(c.apparent_temperature)}°</span>
+        <span>💧 ${c.relative_humidity_2m}%</span>
+        <span>💨 ${Math.round(c.wind_speed_10m)} km/soat</span>
+      </div>`;
+      }
+
+      function renderDaily(d) {
+        $("daily").innerHTML = d.time
+          .map((date, i) =>
+            dayRow(
+              date,
+              d.weather_code[i],
+              d.temperature_2m_min[i],
+              d.temperature_2m_max[i],
+              d.precipitation_sum[i],
+              d.wind_speed_10m_max[i],
+              i === 0
+            )
+          )
+          .join("");
+      }
+
+      async function loadWeather() {
+        $("city").textContent = city.name;
+        $("status").textContent = "Yuklanmoqda...";
+        try {
+          const p = new URLSearchParams({
+            latitude: city.lat,
+            longitude: city.lon,
+            current:
+              "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m",
+            daily: DAILY,
+            forecast_days: "7",
+            timezone: "auto",
+          });
+          const res = await fetch(
+            "https://api.open-meteo.com/v1/forecast?" + p
+          );
+          if (!res.ok) throw new Error("API xatosi");
+          const data = await res.json();
+          renderNow(data.current);
+          renderDaily(data.daily);
+          $("status").textContent = "";
+        } catch (e) {
+          $("status").textContent =
+            "Ma'lumotni olib bo'lmadi. Internetni tekshirib, qayta urinib ko'ring.";
+        }
+      }
+
+      async function loadDay(date) {
+        const box = $("dayBox");
+        if (!date) {
+          box.innerHTML = "";
+          return;
+        }
+        const diff = Math.round(
+          (Date.parse(date) - Date.parse(localISO(new Date()))) / 864e5
+        );
+        if (diff > 15) {
+          box.innerHTML =
+            '<p class="hint">Prognoz faqat 16 kun oldinga mavjud.</p>';
+          return;
+        }
+        const base =
+          diff < -7
+            ? "https://archive-api.open-meteo.com/v1/archive"
+            : "https://api.open-meteo.com/v1/forecast";
+        try {
+          const p = new URLSearchParams({
+            latitude: city.lat,
+            longitude: city.lon,
+            start_date: date,
+            end_date: date,
+            daily: DAILY,
+            timezone: "auto",
+          });
+          const res = await fetch(base + "?" + p);
+          if (!res.ok) throw new Error("API xatosi");
+          const d = (await res.json()).daily;
+          if (!d || !d.time.length || d.temperature_2m_max[0] == null) {
+            box.innerHTML =
+              "<p class=\"hint\">Bu sana uchun ma'lumot yo'q.</p>";
+            return;
+          }
+          box.innerHTML = dayRow(
+            d.time[0],
+            d.weather_code[0],
+            d.temperature_2m_min[0],
+            d.temperature_2m_max[0],
+            d.precipitation_sum[0],
+            d.wind_speed_10m_max[0],
+            false
+          );
+        } catch (e) {
+          box.innerHTML = "<p class=\"hint\">Ma'lumotni olib bo'lmadi.</p>";
+        }
+      }
+
+      // Shahar qidirish
+      $("cityBtn").onclick = () => {
+        const f = $("searchForm");
+        f.hidden = !f.hidden;
+        $("results").hidden = true;
+        if (!f.hidden) $("q").focus();
+      };
+
+      $("searchForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const q = $("q").value.trim();
+        if (!q) return;
+        const list = $("results");
+        list.innerHTML = "";
+        try {
+          const res = await fetch(
+            "https://geocoding-api.open-meteo.com/v1/search?" +
+              new URLSearchParams({ name: q, count: "5", language: "en" })
+          );
+          const data = await res.json();
+          if (!data.results) {
+            list.innerHTML = '<li class="hint">Shahar topilmadi</li>';
+          } else {
+            for (const r of data.results) {
+              const li = document.createElement("li");
+              const b = document.createElement("button");
+              b.type = "button";
+              b.textContent = r.name;
+              const s = document.createElement("small");
+              s.textContent = [r.admin1, r.country].filter(Boolean).join(", ");
+              b.append(s);
+              b.onclick = () => {
+                city = { name: r.name, lat: r.latitude, lon: r.longitude };
+                saveCity(city);
+                $("searchForm").hidden = true;
+                list.hidden = true;
+                $("q").value = "";
+                loadWeather();
+                loadDay($("date").value);
+              };
+              li.append(b);
+              list.append(li);
+            }
+          }
+        } catch (err) {
+          list.innerHTML = '<li class="hint">Qidirishda xatolik</li>';
+        }
+        list.hidden = false;
+      };
+
+      $("date").onchange = (e) => loadDay(e.target.value);
+
+      $("date").value = localISO(new Date());
+      loadWeather();
+      loadDay($("date").value);
+    </script>
+  </body>
+</html>
